@@ -125,7 +125,7 @@ Instead of blindly trusting benchmark metrics, the architecture was redesigned.
 
 # 🧩 Sentence-Level Grounding System
 
-<img src="docs/sentence-level-grounding.png" width="1000">
+<img src="docs/sentence-level-grounding..png" width="1000">
 
 To fix shortcut bias, the project introduced a second verification layer:
 
