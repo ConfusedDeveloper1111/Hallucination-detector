@@ -1,0 +1,11 @@
+transformers
+torch
+gradio
+spacy
+huggingface_hub
+polars
+pyarrow
+scikit-learn
+datasets
+matplotlib
+seaborn
