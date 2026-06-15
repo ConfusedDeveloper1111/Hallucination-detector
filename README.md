@@ -16,7 +16,7 @@
 
 Try the deployed app here:  
 [Hugging Face Space](https://huggingface.co/spaces/JBond07/hallucination-detector)
-
+![Live-Demo](docs/live-demoo.png)
 ---
 
 ## Project Overview
