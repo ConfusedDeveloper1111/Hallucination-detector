@@ -1,17 +1,3 @@
-Got it. You do not want a README where images are dumped separately.
-You want a README where the images act like visual storytelling between sections — so a recruiter reads → sees architecture → reads next concept → sees visual proof → continues. That is the correct approach.
-
-Your current README is technically good but structurally too “documentation style.”
-It needs narrative flow + visual breaks.
-
-This is how you should blend the 4 images into the README.
-
----
-
-# 🔥 FINAL README STRUCTURE (WITH IMAGE PLACEMENT)
-
----
-
 # 🔍 Hallucination Detection & Prompt Remediation System
 
 [![HuggingFace Space](https://img.shields.io/badge/🤗%20HuggingFace-Space-blue)](https://huggingface.co/spaces/JBond07/hallucination-detector)
@@ -20,328 +6,282 @@ This is how you should blend the 4 images into the README.
 > Production-grade hybrid NLP system that detects hallucinations in LLM outputs, explains exactly where the hallucination occurred, and generates corrective prompts for grounded regeneration.
 
 ---
+# Hallucination Detection & Prompt Remediation System
 
-# 🚀 Live Demo
-
-👉 **Try it here:**
-[https://huggingface.co/spaces/JBond07/hallucination-detector](https://huggingface.co/spaces/JBond07/hallucination-detector)
+> A hybrid NLP system that detects hallucinated LLM outputs, pinpoints the exact unsupported sentence, and generates corrective prompts for grounded regeneration.
 
 ---
 
-# 🧠 The Problem
+## Live Demo
 
-Modern LLMs often generate responses that sound confident but are factually incorrect.
+Try the deployed app here:  
+[Hugging Face Space](https://huggingface.co/spaces/JBond07/hallucination-detector)
 
-Most hallucination detectors only return a binary label:
+---
+
+## Project Overview
+
+Large Language Models can produce fluent answers that look correct but are factually wrong.  
+This project solves that problem with a two-layer system:
+
+- **Response-level hallucination detection** using a fine-tuned RoBERTa classifier
+- **Sentence-level factual grounding** using DeBERTa NLI
+- **Rule-based prompt remediation** to generate a better grounded response prompt
+
+Instead of only saying “hallucinated” or “faithful,” the system explains:
+- which sentence is wrong,
+- why it is wrong,
+- and how to correct it.
+
+---
+
+## 1) Full Pipeline Overview
+
+![Full Pipeline Overview](docs/full-pipeline-overview.png)
+
+This image shows the complete journey of the system:
+
+1. User provides source context and LLM response  
+2. RoBERTa estimates overall hallucination risk  
+3. Response is split into sentences  
+4. Pronouns are resolved for clearer meaning  
+5. DeBERTa NLI checks each sentence against the source  
+6. A remediation prompt is generated for unsupported or contradictory claims  
+7. The final result is shown in the UI
+
+This is not just a detector.  
+It is a full **detect → explain → remediate** pipeline.
+
+---
+
+## Why This Project Matters
+
+Hallucination is dangerous because the model sounds confident even when it is wrong.  
+A simple classifier is not enough because it does not tell the user what failed.
+
+This project fixes that by combining:
+- factual verification,
+- sentence-level debugging,
+- and grounded prompt regeneration.
+
+That makes the output useful instead of just analytical.
+
+---
+
+## Technology Stack
+
+- **Python** — core implementation
+- **PyTorch** — training and inference
+- **Hugging Face Transformers** — RoBERTa and DeBERTa integration
+- **SpaCy** — sentence splitting and pronoun handling
+- **Polars / Parquet** — efficient dataset processing
+- **Google Colab** — model training
+- **Hugging Face Hub / Spaces** — model and app deployment
+- **Gradio** — interactive interface
+
+---
+
+## Data and Model Training
+
+### Dataset
+The project uses **HaluEval QA data**, a labeled hallucination dataset with:
+- faithful answers
+- hallucinated answers
+
+### Training Approach
+A **RoBERTa-base** classifier was fine-tuned for response-level hallucination detection.
+
+The input was designed as:
+- **Context** = source document
+- **Question + Response** = what the model answered
+
+### Why this setup
+Because hallucination is not just about whether the answer sounds good.  
+It is about whether the answer is actually supported by the source.
+
+### Training Outcome
+The classifier achieved strong validation performance, but deeper analysis showed a hidden issue: shortcut learning.
+
+---
+
+## 2) RoBERTa Training & Fine-Tuning Journey
+
+![RoBERTa Training & Fine-Tuning Journey](docs/roberta-training-journey.png)
+
+This diagram captures the model-building phase:
+- data preparation
+- tokenization
+- fine-tuning
+- validation
+- deployment
+
+The important lesson here is that high metrics alone do not guarantee real reasoning.  
+A model can look strong on paper and still learn the wrong pattern.
+
+---
+
+## Working Mechanism
+
+The system works in two stages:
+
+### Stage 1: Overall response check
+RoBERTa estimates whether the full response looks hallucinated.
+
+### Stage 2: Sentence-level verification
+Each sentence is checked independently against the source using NLI.
+
+### Stage 3: Pronoun resolution
+If a sentence starts with “it,” “they,” “he,” or “she,” the system resolves the subject before verification.
+
+### Stage 4: Remediation
+The system then generates a grounded prompt based on:
+- unsupported claims
+- contradictions
+- faithful sentences
+
+This makes the system actionable instead of just descriptive.
+
+---
+
+## 3) Shortcut Bias Discovery
+
+![Shortcut Bias Discovery](docs/shortcut-bias-discovery.png)
+
+This was the turning point of the project.
+
+At first, RoBERTa achieved excellent accuracy and F1 score.  
+But sentence-level testing exposed a serious issue: it was not truly learning factual correctness.
+
+It was learning a shortcut:
+- short answers often looked faithful
+- long answers often looked hallucinated
+
+So the model started using response length as a proxy for truth.
+
+That is why threshold tuning alone could not fix it.  
+Threshold changes the cutoff, not the learned representation.
+
+This discovery forced a redesign of the architecture.
+
+---
+
+## The Biggest Problem
+
+The biggest problem was **shortcut learning**.
+
+A model can get very high scores while still failing on the actual task.  
+That is exactly what happened here.
+
+The detector appeared accurate, but it was biased toward:
+- length
+- surface pattern
+- dataset artifacts
+
+That would have made the remediation system unreliable if left unfixed.
+
+---
+
+## 4) Sentence-Level Factual Grounding
+
+![Sentence-Level Factual Grounding](docs/sentence-level-grounding.png)
+
+To solve shortcut bias, the system uses **DeBERTa NLI**.
+
+Instead of judging the whole answer at once, it checks each sentence as a logical claim against the context.
+
+NLI gives three signals:
+- **Entailment** — supported by the source
+- **Neutral** — not clearly supported or contradicted
+- **Contradiction** — conflicts with the source
+
+This is the correct tool for sentence-level verification because it answers the exact question:
+
+> Does this sentence follow from the source context?
+
+---
+
+## Fixing the Biggest Problem
+
+The fix was architectural, not cosmetic.
+
+### What changed
+- RoBERTa stayed as the overall response-level signal
+- DeBERTa NLI became the primary sentence-level verifier
+- Pronoun resolution was added to avoid ambiguity
+- Only strong contradictions are flagged
+
+### Why this works
+Because the system no longer depends on a classifier that learned shortcuts.  
+It now checks factual consistency directly.
+
+---
+
+## 5) Automated Remediation Cycle
+
+![Automated Remediation Cycle](docs/remediation-cycle.png)
+
+Detection alone is not enough.  
+The user needs a clear next step.
+
+So the system generates a rule-based corrective prompt:
+
+- **Tier 0** — no issue, no prompt
+- **Tier 1** — unsupported statement, grounding prompt
+- **Tier 2** — contradiction, corrective prompt
+
+This is deterministic, fast, and free.  
+No second LLM is needed to generate the fix.
+
+---
+
+## Confusion Matrix and Performance Forensics
+
+![Confusion Matrix & Performance Forensics](docs/confusion-matrix.png)
+
+The validation results were strong:
+- **Accuracy:** 97.8%
+- **F1 Score:** 97.8%
+- **Precision:** 98.4%
+- **Recall:** 97.2%
+
+But the more important part is the forensic analysis:
+- the model looked strong,
+- yet it had a hidden bias,
+- and the project caught that before deployment.
+
+That is a better engineering outcome than blindly trusting metrics.
+
+---
+
+## Deployment
+
+The project was deployed as an interactive Gradio app on Hugging Face Spaces.
+
+Users can:
+- enter source context
+- paste an LLM response
+- see hallucination risk
+- inspect flagged sentences
+- view confidence scores
+- get a corrective prompt
+
+The model artifact is hosted on Hugging Face Hub, and the app is accessible publicly.
+
+---
+
+## Repository Structure
 
 ```text
-Hallucinated / Not Hallucinated
-```
-
-That is not enough.
-
-A usable hallucination detection system must:
-
-* identify the exact bad sentence
-* explain why it is wrong
-* guide the model toward a corrected grounded response
-
-This project solves all three.
-
----
-
-# 🏗️ Full System Pipeline
-
-<img src="docs/pipeline-architecture.png" width="1000">
-
-### Pipeline Overview
-
-The system works in 4 layers:
-
-| Layer              | Purpose                                   |
-| ------------------ | ----------------------------------------- |
-| Input Layer        | Takes context, question, and LLM response |
-| Detection Core     | Uses RoBERTa + NLI grounding              |
-| Remediation Engine | Generates corrective prompts              |
-| Deployment Layer   | Live Gradio + HuggingFace interface       |
-
-Unlike traditional hallucination classifiers, this project combines:
-
-* coarse response-level detection
-* sentence-level logical verification
-* deterministic remediation
-
-This makes the system actionable instead of just analytical.
-
----
-
-# ⚠️ Critical Discovery During Development
-
-During evaluation, the RoBERTa classifier achieved:
-
-* **98% F1 Score**
-* **98% Accuracy**
-
-At first this looked excellent.
-
-But deeper investigation revealed something dangerous:
-
-The model had learned a **shortcut bias**.
-
-Instead of learning factual correctness, it partially learned:
-
-```text
-short response = faithful
-long response = hallucinated
-```
-
-This meant the model could appear highly accurate while still reasoning incorrectly.
-
----
-
-# 🔬 Shortcut Bias Discovery
-
-<img src="docs/shortcut-bias-discovery.png" width="1000">
-
-### What happened?
-
-The HaluEval dataset contains:
-
-* very short faithful answers
-* longer hallucinated answers
-
-RoBERTa exploited response length as a shortcut feature.
-
-Threshold tuning could not fix this because:
-
-* thresholds change prediction frequency
-* they do NOT change internal representation learning
-
-This became the turning point of the project.
-
-Instead of blindly trusting benchmark metrics, the architecture was redesigned.
-
----
-
-# 🧩 Sentence-Level Grounding System
-
-<img src="docs/sentence-level-grounding..png" width="1000">
-
-To fix shortcut bias, the project introduced a second verification layer:
-
-## DeBERTa Natural Language Inference (NLI)
-
-Instead of checking the whole response at once, the system:
-
-1. splits response into sentences
-2. resolves pronouns using SpaCy
-3. checks each sentence against the source context
-4. classifies each sentence as:
-
-   * Entailed
-   * Contradicted
-   * Unsupported
-
-Example:
-
-```text
-Context:
-Python was created by Guido van Rossum.
-
-LLM Response:
-"It was released in 1991."
-```
-
-Without pronoun resolution:
-
-```text
-"It" → ambiguous
-```
-
-After SpaCy subject extraction:
-
-```text
-"Python was released in 1991."
-```
-
-Then NLI performs logical grounding.
-
-This transformed the system from:
-
-```text
-classification
-```
-
-into:
-
-```text
-evidence-based verification
-```
-
----
-
-# 🔁 Human-in-the-Loop Remediation
-
-<img src="docs/human-in-the-loop-remediation.png" width="1000">
-
-Detection alone is not useful.
-
-The system must help users recover from hallucinations.
-
-So the project includes a 3-tier remediation engine:
-
-| Tier   | Condition          | Action            |
-| ------ | ------------------ | ----------------- |
-| Tier 0 | Fully faithful     | No prompt         |
-| Tier 1 | Unsupported claims | Grounding prompt  |
-| Tier 2 | Contradictions     | Corrective prompt |
-
-Example corrective output:
-
-```text
-⚠️ The sentence:
-"It was constructed in 1799"
-
-contradicts the source context.
-
-Please regenerate the answer using ONLY the provided context.
-```
-
-The remediation engine is:
-
-* deterministic
-* rule-based
-* zero API cost
-* zero latency
-
-No secondary LLM is required.
-
----
-
-# 📊 Model Performance
-
-| Metric    | Value |
-| --------- | ----- |
-| F1 Score  | 0.978 |
-| Precision | 0.984 |
-| Recall    | 0.972 |
-| Accuracy  | 0.978 |
-
-### Confusion Matrix
-
-|                     | Predicted Faithful | Predicted Hallucinated |
-| ------------------- | ------------------ | ---------------------- |
-| Actual Faithful     | 492                | 7                      |
-| Actual Hallucinated | 11                 | 490                    |
-
----
-
-# 🛠️ Tech Stack
-
-| Component             | Technology            |
-| --------------------- | --------------------- |
-| Classifier            | RoBERTa-base          |
-| Sentence Verification | DeBERTa-v3 NLI        |
-| NLP Parsing           | SpaCy                 |
-| Training              | PyTorch + HuggingFace |
-| Dataset Processing    | Polars + PyArrow      |
-| UI                    | Gradio                |
-| Deployment            | HuggingFace Spaces    |
-
----
-
-# 📁 Dataset
-
-### HaluEval QA Dataset
-
-* 10,000 samples
-* balanced labels
-* hallucinated vs faithful responses
-
-Fields:
-
-```text
-context
-question
-response
-label
-```
-
----
-
-# 🚀 Running Locally
-
-```bash
-git clone https://github.com/JBond07/hallucination-detector
-
-cd hallucination-detector
-
-pip install -r requirements.txt
-
-python app.py
-```
-
----
-
-# 🌐 Deployment
-
-### HuggingFace Space
-
-[https://huggingface.co/spaces/JBond07/hallucination-detector](https://huggingface.co/spaces/JBond07/hallucination-detector)
-
-### HuggingFace Model
-
-[https://huggingface.co/JBond07/hallucination-detector-roberta](https://huggingface.co/JBond07/hallucination-detector-roberta)
-
----
-
-# 📌 Key Engineering Lessons
-
-This project taught several important ML engineering lessons:
-
-* High benchmark scores can still hide failure modes
-* Shortcut learning is common in NLP datasets
-* Sentence-level grounding is more reliable than coarse classification
-* Explainability matters as much as accuracy
-* Detection without remediation is incomplete
-
----
-
-# 🔮 Future Improvements
-
-* RAG integration
-* multi-document grounding
-* long-context chunking
-* multilingual support
-* retrieval-backed correction
-* automatic answer regeneration
-
----
-
-# 👤 Author
-
-Aryan Makka
-GitHub: [https://github.com/JBond07](https://github.com/JBond07)
-HuggingFace: [https://huggingface.co/JBond07](https://huggingface.co/JBond07)
-
----
-
-This structure is significantly better because:
-
-* images appear exactly where the concept is discussed
-* visuals support the explanation
-* recruiter reads like a story
-* architecture evolution becomes obvious
-* your shortcut-bias discovery becomes a standout engineering insight
-
-Right now your strongest differentiator is NOT the F1 score.
-
-It is this:
-
-```text
-You discovered the model was cheating,
-proved it,
-and redesigned the architecture correctly.
-```
-
-That is the part recruiters and evaluators will remember.
+Hallucination-detector/
+├── docs/
+│   ├── full-pipeline-overview.png
+│   ├── roberta-training-finetuning-journey.png
+│   ├── shortcut-bias-discovery.png
+│   ├── sentence-level-factual-grounding.png
+│   ├── automated-remediation-cycle.png
+│   └── confusion-matrix-performance-forensics.png
+├── src/
+├── configs/
+├── README.md
+├── requirements.txt
+└── setup.sh
